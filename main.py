@@ -12,8 +12,20 @@ def read_root():
 
 
 @app.get("/courses", response_model=list[Course])
-def list_courses():
-    return get_all_courses()
+def list_courses(is_elective: bool | None = None, sort: str = "popular"):
+    courses = get_all_courses()
+
+    # `is not None`, а не `if is_elective:` — иначе ?is_elective=false
+    # (False — «ложное» значение) молча проигнорировался бы.
+    if is_elective is not None:
+        courses = [c for c in courses if c.is_elective == is_elective]
+
+    if sort == "title":
+        courses = sorted(courses, key=lambda c: c.title)
+    else:
+        courses = sorted(courses, key=lambda c: c.likes, reverse=True)
+
+    return courses
 
 
 @app.get("/courses/{course_id}", response_model=Course)
