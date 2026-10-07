@@ -1,4 +1,6 @@
-from fastapi import Depends, FastAPI, HTTPException
+from typing import Annotated, Literal
+
+from fastapi import Depends, FastAPI, HTTPException, Query
 
 from data import find_course, get_all_courses
 from models import Course
@@ -6,7 +8,10 @@ from models import Course
 app = FastAPI(title="Course Catalog API")
 
 
-def pagination(page: int = 1, page_size: int = 20):
+def pagination(
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+):
     # offset — сколько элементов пропустить
     return {"offset": (page - 1) * page_size, "limit": page_size}
 
@@ -19,14 +24,21 @@ def read_root():
 @app.get("/courses", response_model=list[Course])
 def list_courses(
     is_elective: bool | None = None,
-    sort: str = "popular",
+    sort: Literal["popular", "title"] = "popular",
+    q: str | None = None,
     p: dict = Depends(pagination),
 ):
     courses = get_all_courses()
 
-    # Порядок важен: фильтр -> сортировка -> срез страницы.
+    # Порядок важен: фильтр -> поиск -> сортировка -> срез страницы.
+    # `is not None`, а не `if is_elective:` — иначе ?is_elective=false
+    # (False — «ложное» значение) молча проигнорировался бы.
     if is_elective is not None:
         courses = [c for c in courses if c.is_elective == is_elective]
+
+    if q:
+        needle = q.lower()
+        courses = [c for c in courses if needle in c.title.lower()]
 
     if sort == "title":
         courses = sorted(courses, key=lambda c: c.title)
