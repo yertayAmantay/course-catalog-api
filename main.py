@@ -11,6 +11,20 @@ from schemas import CourseOut, CourseStats, EnrollmentDetail, EnrollmentIn, Enro
 app = FastAPI(title="Course Catalog API")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
 SessionDep = Annotated[Session, Depends(get_db)]
+CONSTRAINT_ERRORS = {
+    "students_email_key": (409, "Student with this email already exists"),
+    "enrollments_course_id_student_id_key": (409, "Student is already enrolled in this course"),
+    "enrollments_course_id_fkey": (404, "Course not found"),
+    "enrollments_student_id_fkey": (404, "Student not found"),
+}
+
+def raise_http_error(exc: IntegrityError):
+    name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    error = CONSTRAINT_ERRORS.get(name)
+    if error is None:
+        raise exc
+    raise HTTPException(status_code=error[0], detail=error[1]) from exc
+
 def pagination(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
     return {"offset": (page - 1) * page_size, "limit": page_size}
 
@@ -49,14 +63,22 @@ def like_course(course_id: str, db: SessionDep):
 def create_student(data: StudentIn, db: SessionDep):
     student = Student(name=data.name, email=str(data.email))
     db.add(student)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise_http_error(exc)
     return student
 
 @app.post("/enrollments", response_model=EnrollmentOut, status_code=201)
 def create_enrollment(data: EnrollmentIn, db: SessionDep):
     enrollment = Enrollment(**data.model_dump())
     db.add(enrollment)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise_http_error(exc)
     return enrollment
 
 @app.get("/enrollments", response_model=list[EnrollmentDetail])
