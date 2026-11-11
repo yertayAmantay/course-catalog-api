@@ -33,11 +33,13 @@ def read_root():
     return {"message": "Course Catalog API is running"}
 
 @app.get("/courses", response_model=list[CourseOut])
-def list_courses(db: SessionDep, is_elective: bool | None = None,
+def list_courses(db: SessionDep, is_elective: bool | None = None, level: str | None = None,
                  sort: Literal["popular", "title"] = "popular", q: str | None = None, p: dict = Depends(pagination)):
     stmt = select(Course)
     if is_elective is not None:
         stmt = stmt.where(Course.is_elective == is_elective)
+    if level is not None:
+        stmt = stmt.where(Course.level == level)
     if q:
         stmt = stmt.where(Course.title.icontains(q, autoescape=True))
     stmt = stmt.order_by(Course.title, Course.id) if sort == "title" else stmt.order_by(Course.likes.desc(), Course.id)
