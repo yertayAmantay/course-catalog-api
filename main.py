@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, HTTPException, Query
 
 from data import find_course, get_all_courses
-from models import Course
+from schemas import Course
 
 app = FastAPI(title="Course Catalog API")
 
